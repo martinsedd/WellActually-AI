@@ -1,0 +1,79 @@
+[project]
+name = "wellactually"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+  "httpx>=0.28.1",
+  "kuzu>=0.11.3",
+  "lancedb>=0.27.1",
+  "numpy>=2.4.2",
+  "pandas>=3.0.0",
+  "pydantic>=2.12.5",
+  "pydantic-settings>=2.12.0",
+  "rich>=14.3.2",
+  "sentence-transformers>=5.2.2",
+  "tree-sitter>=0.25.2",
+  "typer>=0.21.1",
+  "watchdog>=6.0.0",
+]
+
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-asyncio", "black", "ruff", "mypy"]
+
+[project.scripts]
+wellactually = "wellactually.main:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.black]
+line-length = 120
+target-version = ["py314"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py314"
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+
+# Strictness baseline
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+
+# Enforce complete type coverage
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+disallow_untyped_calls = true
+disallow_untyped_decorators = true
+
+# Catch implicit issues
+no_implicit_optional = true
+no_implicit_reexport = true
+strict_equality = true
+
+# Runtime safety
+ckeck_untyped_defs = true
+warn_unreachable = true
+
+# Pydantic compabibility
+plugins = ["pydantic.mypy"]
+
+# Performance-critical async code
+warn_no_return = true
+warn_return_any = true
+
+# Prevent "Any" pollution across core boundaries
+disallow_any_unimported = true
+disallow_any_expr = false       # Too strict for LLM responses
+disallow_any_decorated = false  # Allow Typer decorators
+disallow_any_explicit = false   # Allow explicit Any when needed
+disallow_subclassing_any = true
