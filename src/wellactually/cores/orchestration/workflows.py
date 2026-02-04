@@ -5,13 +5,17 @@ Workflow orchestration for watch and init modes.
 import asyncio
 from pathlib import Path
 
-from rich.console import Console
-
-from wellactually.cores.inference.ollama_client import OllamaClient
-from wellactually.cores.io.doctor import check_compiler, check_gpu, check_ollama
-from wellactually.cores.io.watcher import FileWatcher
-
-console = Console()
+from wellactually.cores.inference.facade import InferenceFacade
+from wellactually.cores.io.facade import IOFacade
+from wellactually.cores.orchestration.output import (
+    print_check_result,
+    print_dim,
+    print_error,
+    print_header,
+    print_info,
+    print_success,
+    print_warning,
+)
 
 
 async def run_watch_mode(path: Path, foggie: bool = False) -> None:
@@ -22,55 +26,49 @@ async def run_watch_mode(path: Path, foggie: bool = False) -> None:
         path: Directory to watch
         foggie: Enable shame mode (boring feedback)
     """
-    console.print("[bold yellow]Starting watch mode...[/bold yellow]")
+    print_header("Starting watch mode...")
 
-    # Pre-flight checks
-    gpu_ok, gpu_msg = check_gpu()
-    if not gpu_ok:
-        console.print(f"[bold red]x[/bold red] {gpu_msg}")
-        console.print("[yellow]WellActually required GPU acceleration. Exiting[/yellow]")
-        return
-    console.print(f"[bold green]✓[/bold green] {gpu_msg}")
+    io_facade = IOFacade()
+    inference_facade = InferenceFacade()
 
-    compiler_ok, compiler_msg = check_compiler()
-    if not compiler_ok:
-        console.print(f"[bold red]x[/bold red] {compiler_msg}")
-        return
-    console.print(f"[bold green]✓[/bold green] {compiler_msg}")
+    preflight = await io_facade.run_preflight_checks()
 
-    ollama_ok, ollama_msg = await check_ollama()
-    if not ollama_ok:
-        console.print(f"[bold red]x[/bold red] {ollama_msg}")
-        return
-    console.print(f"[bold green]✓[/bold green] {ollama_msg}")
+    print_check_result(preflight.gpu_available, preflight.gpu_message)
+    print_check_result(preflight.compiler_available, preflight.compiler_message)
+    print_check_result(preflight.ollama_available, preflight.ollama_message)
 
-    ollama = OllamaClient()
-    warmpup_ok = await ollama.warmup()
-    if not warmpup_ok:
-        console.print("[bold red] Failed to warm up GPU. Exiting.[/bold red]")
-        await ollama.close()
+    if not preflight.all_passed:
+        print_warning("Cannot proceed without required dependencies. Exiting.")
         return
 
-    console.print(f"\n[cyan]Watching:[/cyan] {path}")
+    print_dim("Initializing inference engine...")
+    init_ok = await inference_facade.initialize()
+    if not init_ok:
+        print_error("Failed to initialize inference engine. Exiting.")
+        return
+
+    print("")
+    print_info(f"Watching: {path}")
     if foggie:
-        console.print("[dim](Shame mode enabled)[/dim]")
+        print_dim("(Shame mode enabled)")
 
-    # ---
+    # Callback for file changes
     def on_file_changed(file_path: Path) -> None:
-        console.print(f"[yellow]File changed:[/yellow] {file_path}")
-        # TODO: Wire to Core-Analysis and Core-Inference
+        print_warning(f"File changed: {file_path}")
+        # TODO: Wire to Core-Analysis and inference_facade
 
-    watcher = FileWatcher(path, on_file_changed, debouce_seconds=1.0)
-    watcher.start()
+    io_facade.start_watching(path, on_file_changed, debounce_seconds=1.0)
 
     try:
-        console.print("[green]Watching for changes... (Ctrl+C to stop)[/green]")
+        print_success("Watching for changes... (Ctrl+C to stop)")
         while True:
             await asyncio.sleep(1)
     except KeyboardInterrupt:
-        console.print("\n[yello]Stopping watch mode...[/yellow]")
+        print("")
+        print_warning("Stopping watch mode...")
     finally:
-        watcher.stop()
+        io_facade.stop_watching()
+        await inference_facade.close()
 
 
 async def run_init_mode(path: Path) -> None:
@@ -80,21 +78,19 @@ async def run_init_mode(path: Path) -> None:
     Args:
         path: Project directory to initialize
     """
-    console.print("[bold green]Initializing project...[/bold green]")
-    console.print(f"[cyan]Path:[/cyan] {path}")
+    print_header("Initializing project...")
+    print_info(f"Path: {path}")
 
-    # Pre-flight checks
-    gpu_ok, gpu_msg = check_gpu()
-    console.print(f"[bold green]✓[/bold green] {gpu_msg}" if gpu_ok else f"[bold red]x[/bold red] {gpu_msg}")
+    io_facade = IOFacade()
+    preflight = await io_facade.run_preflight_checks()
 
-    compiler_ok, compiler_msg = check_compiler()
-    console.print(
-        f"[bold green]✓[/bold green] {compiler_msg}" if compiler_ok else f"[bold red]x[/bold red] {compiler_msg}"
-    )
+    print_check_result(preflight.gpu_available, preflight.gpu_message)
+    print_check_result(preflight.compiler_available, preflight.compiler_message)
 
-    if not gpu_ok or not compiler_ok:
-        console.print("[yellow]Cannot proceed without required dependencies.[/yellow]")
+    if not preflight.critical_passed:
+        print_warning("Cannot proceed without required dependencies.")
         return
 
-    console.print("\n[yellow]Genesis Scan will be implemented in Phase 1[/yellow]")
+    print("")
+    print_warning("Genesis Scan will be implemented in Phase 1")
     # TODO: Wire to Core-Structure for Genesis Scan

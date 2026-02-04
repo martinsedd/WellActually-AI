@@ -8,7 +8,7 @@ from pathlib import Path
 import typer
 from rich.console import Console
 
-from wellactually.cores.io.doctor import check_compiler, check_gpu, check_ollama
+from wellactually.cores.io.facade import IOFacade
 from wellactually.cores.orchestration.workflows import run_init_mode, run_watch_mode
 
 app = typer.Typer(
@@ -23,44 +23,20 @@ console = Console()
 @app.command()
 def watch(
     path: str = typer.Argument(".", help="Path to watch for file changes"),
-    foggie: bool = typer.Option(
-        False,
-        "--foggie",
-        help="Enable shame mode (boring                                                                            feedback)",
-    ),
+    foggie: bool = typer.Option(False, "--foggie", help="Enable shame mode (boring feedback)"),
 ) -> None:
-    """
-    Watch a directory for file changes and provide real-time architectural feedback.
-    """
+    """Watch a directory for file changes and provide real-time architectural feedback."""
     path_obj = Path(path).resolve()
-
-    if not path_obj.exists():
-        console.print(f"[bold red]Error:[/bold red] Path does not exist: {path}")
-        raise typer.Exit(1)
-
-    if not path_obj.is_dir():
-        console.print(f"[bold red]Error:[/bold red] Path is not a directory: {path}")
-        raise typer.Exit(1)
+    _check_path_is_valid(path_obj)
 
     asyncio.run(run_watch_mode(path_obj, foggie))
 
 
 @app.command()
-def init(
-    path: str = typer.Argument(".", help="Path to initialize"),
-) -> None:
-    """
-    Initialize WellActually for a project (runs Genesis Scan).
-    """
+def init(path: str = typer.Argument(".", help="Path to initialize")) -> None:
+    """Initialize WellActually for a project (runs Genesis Scan)."""
     path_obj = Path(path).resolve()
-
-    if not path_obj.exists():
-        console.print(f"[bold red]Error:[/bold red] Path does not exist: {path}")
-        raise typer.Exit(1)
-
-    if not path_obj.is_dir():
-        console.print(f"[bold red]Error:[/bold red] Path is not a directory: {path}")
-        raise typer.Exit(1)
+    _check_path_is_valid(path_obj)
 
     asyncio.run(run_init_mode(path_obj))
 
@@ -72,33 +48,44 @@ def doctor() -> None:
     """
     console.print("[bold cyan]Running pre-flight checks...[/bold cyan]\n")
 
-    gpu_ok, gpu_msg = check_gpu()
-    console.print(f"[bold green]✓[/bold green] {gpu_msg}" if gpu_msg else f"[bold red]x[/bold red] {gpu_msg}")
+    async def run_checks() -> None:
+        preflight = await IOFacade.run_preflight_checks()
 
-    compiler_ok, compiler_msg = check_compiler()
-    console.print(
-        f"[bold green]✓[/bold green] {compiler_msg}" if compiler_ok else f"[bold red]x[/bold red] {compiler_msg}"
-    )
+        _print_check_result(preflight.gpu_available, preflight.gpu_message)
+        _print_check_result(preflight.compiler_available, preflight.compiler_message)
+        _print_check_result(preflight.ollama_available, preflight.ollama_message)
 
-    async def check_ollama_async() -> None:
-        ollama_ok, ollama_msg = await check_ollama()
-        console.print(f"[bold green]✓[/bold green] {ollama_msg}" if ollama_ok else f"[bold red]x[/bold] {ollama_msg}")
+        console.print()
+        if preflight.all_passed:
+            console.print("[bold green]System is ready for WellActually![/bold green]")
+        else:
+            console.print("[bold yellow]Some checks failed. Please resolve issues before running.[/bold yellow]")
+            raise typer.Exit(1)
 
-    asyncio.run(check_ollama_async())
-
-    console.print()
-    if gpu_ok and compiler_ok:
-        console.print("[bold green]System is ready for WellActually![/bold green]")
-    else:
-        console.print("[bold yellow]Some checks failed. Please resolve issues before running.[/bold yellow]")
-        raise typer.Exit(1)
+    asyncio.run(run_checks())
 
 
 @app.command()
 def version() -> None:
-    """
-    Show WellActually version.
-    """
     from wellactually import __version__
 
     console.print(f"WellActually v{__version__}")
+
+
+def _check_path_is_valid(path: Path) -> None:
+    if not path.exists():
+        _print_error(f"Path does not exist: {path}")
+        raise typer.Exit(1)
+
+    if not path.is_dir():
+        _print_error(f"Path is not a directory: {path}")
+        raise typer.Exit(1)
+
+
+def _print_check_result(passed: bool, message: str) -> None:
+    icon = "[bold green]✓[/bold green]" if passed else "[bold red]X[/bold red]"
+    console.print(f"{icon} {message}")
+
+
+def _print_error(text: str) -> None:
+    console.print(f"[bold red]Error: [/bold red] {text}")
