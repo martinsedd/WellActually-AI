@@ -1,1 +1,0 @@
-- We'll use Gitflow. We'll commit often. We'll use develop and feature branches. You'll ALWAYS remember to tell me to commit and the commit message, but rather than proactively doing that, wait for me to have accepted all the code you've given me, then show me the commit. Ask for confirmation that I have indeed commited.

@@ -9,3 +9,6 @@ wheels/
 # Virtual environments
 .venv
 .idea/
+CLAUDE.md
+roadmap.md
+wellactually_specs.md
