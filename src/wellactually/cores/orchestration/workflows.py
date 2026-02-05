@@ -16,6 +16,7 @@ from wellactually.cores.orchestration.output import (
     print_success,
     print_warning,
 )
+from wellactually.cores.structure.facade import StructureFacade
 
 
 async def run_watch_mode(path: Path, foggie: bool = False) -> None:
@@ -30,6 +31,7 @@ async def run_watch_mode(path: Path, foggie: bool = False) -> None:
 
     io_facade = IOFacade()
     inference_facade = InferenceFacade()
+    structure_facade = StructureFacade(path)
 
     preflight = await io_facade.run_preflight_checks()
 
@@ -55,6 +57,7 @@ async def run_watch_mode(path: Path, foggie: bool = False) -> None:
     # Callback for file changes
     def on_file_changed(file_path: Path) -> None:
         print_warning(f"File changed: {file_path}")
+        structure_facade.update_file(file_path)
         # TODO: Wire to Core-Analysis and inference_facade
 
     io_facade.start_watching(path, on_file_changed, debounce_seconds=1.0)
@@ -69,6 +72,7 @@ async def run_watch_mode(path: Path, foggie: bool = False) -> None:
     finally:
         io_facade.stop_watching()
         await inference_facade.close()
+        structure_facade.close()
 
 
 async def run_init_mode(path: Path) -> None:
@@ -92,5 +96,10 @@ async def run_init_mode(path: Path) -> None:
         return
 
     print("")
-    print_warning("Genesis Scan will be implemented in Phase 1")
-    # TODO: Wire to Core-Structure for Genesis Scan
+    print_dim("Running Genesis Scan...")
+
+    structure_facade = StructureFacade(path)
+    structure_facade.run_genesis_scan(extensions=[".py"])
+
+    print_success("Project initialized successfully!")
+    structure_facade.close()

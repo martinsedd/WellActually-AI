@@ -127,3 +127,29 @@ class GenesisScanner:
         except Exception as e:
             console.print(f"[red]Error parsing {file_path}: {e}[/red]")
             return None
+
+    def _resolve_import(self, module_path: str, current_file: str, project_root: Path) -> str | None:
+        """
+        Resolve an import statement to an actual file path.
+
+        Args:
+            module_path: The imported module name (e.g., "wellactually.cores.io")
+            current_file: Current file path doing the import
+            project_root: Project root directory
+
+        Returns:
+            Resolved file path or None if not found
+        """
+        # Convert module path to file path
+        # e.g., "wellactually.cores.io" -> "wellactually/cores/io.py" or
+        # "wellactually/cores/io/__init__.py"
+
+        parts = module_path.split(".")
+
+        candidate = project_root / Path(*parts[:-1]) / f"{parts[-1]}.py"
+        if candidate.exists():
+            return str(candidate.relative_to(project_root))
+
+        # Relative import handling would go here
+        # For now, return None for unresolved imports
+        return None
